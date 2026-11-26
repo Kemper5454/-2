@@ -1,0 +1,71 @@
+{
+  "uid": "iot-lambda",
+  "title": "IoT: живой мониторинг и суточный отчёт",
+  "timezone": "browser",
+  "refresh": "5s",
+  "time": { "from": "now-30m", "to": "now" },
+  "schemaVersion": 39,
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Speed layer: событий в минуту (все датчики)",
+      "datasource": { "type": "postgres", "uid": "serving" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT window_start AS time, sum(events_cnt) AS events FROM live_sensor_1m WHERE $__timeFilter(window_start) GROUP BY 1 ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Speed layer: средняя температура по датчикам (окно 1 мин)",
+      "datasource": { "type": "postgres", "uid": "serving" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "celsius" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT window_start AS time, sensor_id AS metric, avg_temp AS value FROM live_sensor_1m WHERE $__timeFilter(window_start) ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "Batch layer: суточный отчёт (daily_report)",
+      "datasource": { "type": "postgres", "uid": "serving" },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT event_date::text AS event_date, sensor_id, events_cnt, round(avg_temp::numeric, 2) AS avg_temp, min_temp, max_temp, loaded_at FROM daily_report ORDER BY event_date DESC, sensor_id"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Сверка: эталон генератора / batch-отчёт / speed",
+      "datasource": { "type": "postgres", "uid": "serving" },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT c.event_date::text AS event_date, c.sent_messages AS \"отправлено сообщений\", c.unique_events AS \"уникальных (эталон)\", d.cnt AS \"batch-отчёт\", l.cnt AS \"speed\" FROM generator_control c LEFT JOIN (SELECT event_date, sum(events_cnt) AS cnt FROM daily_report GROUP BY 1) d USING (event_date) LEFT JOIN (SELECT (window_start AT TIME ZONE 'UTC')::date AS event_date, sum(events_cnt) AS cnt FROM live_sensor_1m GROUP BY 1) l USING (event_date) ORDER BY 1 DESC"
+        }
+      ]
+    }
+  ]
+}
